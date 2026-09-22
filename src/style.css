@@ -1,0 +1,186 @@
+:root {
+  --bg: #0d0d0d;
+  --ink: #f5f1e8;
+  --accent: #e8b64c;
+  --card: rgba(8, 8, 10, 0.62);
+  --line: rgba(255, 255, 255, 0.14);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: auto; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+}
+
+/* Canvas WebGL fijo a pantalla completa */
+#canvas-container, #canvas-container canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
+#grain {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.09;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+
+#hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.1rem 1.4rem;
+  pointer-events: none;
+  mix-blend-mode: normal;
+}
+
+.hud-kicker {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.3rem;
+}
+
+#hud h1 {
+  font-size: clamp(1.1rem, 2.4vw, 1.7rem);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.hud-right { text-align: right; }
+#hud-year {
+  display: block;
+  font-size: clamp(2rem, 6vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+#hud-era { font-size: 0.8rem; opacity: 0.7; letter-spacing: 0.18em; }
+
+/* Cada época aporta 160vh de scroll vertical */
+#timeline-wrapper { position: relative; z-index: 5; }
+
+.era {
+  min-height: 160vh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 6vw;
+  pointer-events: none;
+}
+
+/* Alternar lado de la tarjeta para reforzar el movimiento horizontal */
+.era:nth-child(even) { justify-content: flex-end; }
+
+.info-card {
+  pointer-events: auto;
+  max-width: 400px;
+  padding: 1.6rem 1.7rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(50px);
+}
+
+.info-card .year {
+  color: var(--accent);
+  font-size: 0.78rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.info-card h2 { margin: 0.55rem 0 0.5rem; font-size: 1.7rem; line-height: 1.1; }
+.info-card p { opacity: 0.88; line-height: 1.55; font-size: 0.98rem; }
+.info-card .hint { display: inline-block; margin-top: 0.9rem; font-size: 0.8rem; opacity: 0.6; }
+
+/* Progreso inferior */
+#progress {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 64px;
+  z-index: 10;
+  width: min(520px, 80vw);
+}
+
+#progress-bar {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#progress-fill { height: 100%; width: 0%; background: var(--accent); }
+
+#dots {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  opacity: 0.85;
+}
+#dots button {
+  background: none; border: none; color: inherit;
+  cursor: pointer; opacity: 0.55; font: inherit;
+  padding: 2px 4px;
+}
+#dots button.active { opacity: 1; color: var(--accent); }
+
+/* Tira horizontal inferior: se traslada en X con el scroll */
+#filmstrip {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 44px;
+  z-index: 9;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+}
+#filmstrip-inner {
+  display: flex;
+  gap: 8px;
+  height: 100%;
+  align-items: center;
+  padding: 0 12px;
+  width: max-content;
+  will-change: transform;
+}
+#filmstrip-inner img {
+  height: 30px;
+  width: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  opacity: 0.75;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+#fallback {
+  position: fixed; inset: auto 1rem 5rem 1rem; z-index: 20;
+  background: #2a1503; padding: 1rem; border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+  .era { padding: 0 1rem; justify-content: center !important; }
+  .info-card { max-width: 92vw; }
+}

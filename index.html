@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barrio Abajo — Línea de Tiempo Morph 3D</title>
+  <meta name="description" content="Scroll vertical que avanza horizontalmente en el tiempo. Morphing 3D WebGL entre fotos JPG de distintas épocas de Barrio Abajo, Barranquilla." />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <!-- Lienzo WebGL fijo: aquí ocurre el morphing 3D -->
+  <div id="canvas-container" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+
+  <!-- HUD superior -->
+  <header id="hud">
+    <div class="hud-left">
+      <span class="hud-kicker">Barranquilla · Barrio Abajo</span>
+      <h1>Línea de tiempo inmersiva</h1>
+    </div>
+    <div class="hud-right">
+      <span id="hud-era">01 / 05</span>
+      <span id="hud-year">1880</span>
+    </div>
+  </header>
+
+  <!-- Contenedor con altura de scroll: el scroll vertical genera el avance -->
+  <main id="timeline-wrapper">
+    <!-- Track horizontal fantasma: se desplaza en X para dar la sensación lateral -->
+    <div id="ghost-track" aria-hidden="true"></div>
+
+    <!-- Secciones por época: cada una ocupa 150vh de scroll -->
+    <section class="era" data-index="0" data-year="1880">
+      <div class="info-card">
+        <span class="year">1880 · Fundación</span>
+        <h2>Orígenes del Barrio Abajo</h2>
+        <p>Calles de arena, casas de bahareque y palma. Pescadores, artesanos y el primer latido festivo junto al caño.</p>
+        <span class="hint">Sigue bajando ↓</span>
+      </div>
+    </section>
+
+    <section class="era" data-index="1" data-year="1920">
+      <div class="info-card">
+        <span class="year">1920 · Aduana y Tranvía</span>
+        <h2>Puerto y modernidad</h2>
+        <p>La Aduana, el tranvía y las casonas republicanas. El barrio se vuelve puerta comercial del Caribe.</p>
+      </div>
+    </section>
+
+    <section class="era" data-index="2" data-year="1960">
+      <div class="info-card">
+        <span class="year">1960 · Industria y Carnaval</span>
+        <h2>Consolidación popular</h2>
+        <p>Fábricas junto al río, cumbiambas y danzas. El Carnaval encuentra aquí su casa.</p>
+      </div>
+    </section>
+
+    <section class="era" data-index="3" data-year="1990">
+      <div class="info-card">
+        <span class="year">1990 · Resistencia</span>
+        <h2>Memoria que resiste</h2>
+        <p>Deterioro urbano pero resistencia cultural: comparsas, cocinas tradicionales y vecindad.</p>
+      </div>
+    </section>
+
+    <section class="era" data-index="4" data-year="2026">
+      <div class="info-card">
+        <span class="year">2026 · Distrito Creativo</span>
+        <h2>Presente vivo</h2>
+        <p>Museo del Caribe, Plaza de la Aduana, Rincón del Cumbiambero. El barrio renace sin perder su alma.</p>
+        <span class="hint">↑ Sube para viajar al pasado</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Barra de progreso + dots por época -->
+  <nav id="progress">
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+    <div id="dots"></div>
+  </nav>
+
+  <!-- Tira horizontal inferior: refuerzo visual del avance lateral -->
+  <div id="filmstrip" aria-hidden="true"><div id="filmstrip-inner"></div></div>
+
+  <div id="fallback" hidden>
+    <p>Tu navegador no soporta WebGL. Muestra las imágenes con fundido simple.</p>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
