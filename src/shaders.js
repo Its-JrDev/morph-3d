@@ -1,29 +1,21 @@
-// Shaders para morphing 3D entre JPGs de DISTINTAS escenas.
-// Clave: NO deformar geometría para "encajar" (se vería mal con fotos
-// disímiles). En su lugar:
-//  - Vertex: onda 3D sutil (tela flotante) con amplitud máxima a mitad de transición.
-//  - Fragment: distorsión UV por ruido + disolución con borde de "quemado de archivo"
-//    (sepia brillante) que oculta el corte entre fotos distintas.
+// Variante TÚNEL: la cámara ATRAVIESA cada foto en vez de fundirla.
+// - Vertex: empuje fuerte en Z + expansión radial a mitad del vuelo.
+// - Fragment: zoom radial continuo (tex1 se adentra, tex2 emerge desde
+//   adentro), blur de velocidad, aberración cromática en bordes, flash
+//   cálido que oculta el corte entre fotos de lugares distintos.
 
 export const vertexShader = /* glsl */ `
-uniform float uProgress;   // 0..1 dentro del par actual
-uniform float uIntensity;  // amplitud del relieve 3D
+uniform float uProgress; // 0..1 dentro del par actual
+uniform float uCalm;     // 1 = reduced-motion (vuelo casi plano)
 varying vec2 vUv;
 
 void main() {
   vUv = uv;
   vec3 pos = position;
-
-  // Envolvente: 0 en los extremos, 1 en el medio -> sin deformación residual
-  float env = sin(uProgress * 3.14159265);
-
-  float w1 = sin(pos.x * 3.0 + uProgress * 6.2831) * 0.5;
-  float w2 = sin(pos.y * 4.0 - uProgress * 6.2831) * 0.5;
-  pos.z += (w1 + w2) * uIntensity * env;
-
-  // Leve empuje hacia la cámara a mitad del morph (sensación "zoom-through")
-  pos.z += env * 0.35;
-
+  float env = sin(uProgress * 3.14159265); // 0 en extremos, 1 a mitad
+  float amp = mix(2.2, 0.4, uCalm);
+  pos.z += env * amp;
+  pos.xy *= 1.0 + env * 0.12 * (1.0 - uCalm);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
 }
 `;
@@ -33,41 +25,11 @@ precision highp float;
 
 uniform sampler2D uTex1;
 uniform sampler2D uTex2;
-uniform float uProgress;  // 0..1
-uniform float uNoiseScale; // escala del ruido de disolución
-uniform float uEdgeWidth;  // grosor del borde de transición
-uniform float uSepia1;     // 1 = foto antigua sepia, 0 = color actual
+uniform float uProgress;
+uniform float uSepia1;
 uniform float uSepia2;
-uniform float uDissolveAmp; // amplitud de distorsión UV previa al corte
+uniform float uCalm;
 varying vec2 vUv;
-
-// --- Simplex noise 2D (Ashima) ---
-vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }
-
-float snoise(vec2 v) {
-  const vec4 C = vec4(0.211324865405187, 0.366025403784439,
-                      -0.577350269189626, 0.024390243902439);
-  vec2 i = floor(v + dot(v, C.yy));
-  vec2 x0 = v - i + dot(i, C.xx);
-  vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
-  vec4 x12 = x0.xyxy + C.xxzz;
-  x12.xy -= i1;
-  i = mod(i, 289.0);
-  vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
-                 + i.x + vec3(0.0, i1.x, 1.0));
-  vec3 m = max(0.5 - vec3(dot(x0, x0), dot(x12.xy, x12.xy),
-                          dot(x12.zw, x12.zw)), 0.0);
-  m = m*m; m = m*m;
-  vec3 x = 2.0 * fract(p * C.www) - 1.0;
-  vec3 h = abs(x) - 0.5;
-  vec3 ox = floor(x + 0.5);
-  vec3 a0 = x - ox;
-  m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
-  vec3 g;
-  g.x = a0.x * x0.x + h.x * x0.y;
-  g.yz = a0.yz * x12.xz + h.yz * x12.yw;
-  return 130.0 * dot(m, g);
-}
 
 vec3 applySepia(vec3 c, float amt) {
   vec3 sep = vec3(
@@ -78,35 +40,59 @@ vec3 applySepia(vec3 c, float amt) {
   return mix(c, sep, amt);
 }
 
+// Blur de 9 taps con aberración cromática radial (bordes se separan en vuelo)
+vec3 flightSample(sampler2D t, vec2 uv, vec2 dir, float radius, float aberr) {
+  vec2 px = dir * radius;
+  vec2 ab = dir * aberr;
+  float r = texture2D(t, uv + px + ab).r;
+  float g2 = texture2D(t, uv).g;
+  float b = texture2D(t, uv - px - ab).b;
+  vec3 col = vec3(r, g2, b) * 0.4;
+  col += texture2D(t, uv + px * 2.0).rgb * 0.15;
+  col += texture2D(t, uv - px * 2.0).rgb * 0.15;
+  col += texture2D(t, uv + vec2(px.y, -px.x) * 2.0).rgb * 0.15;
+  col += texture2D(t, uv - vec2(px.y, -px.x) * 2.0).rgb * 0.15;
+  return col;
+}
+
 void main() {
-  // Ruido de disolución (dos octavas para borde orgánico)
-  float n = snoise(vUv * uNoiseScale) * 0.5 + 0.5;
-  n = n * 0.7 + (snoise(vUv * uNoiseScale * 2.3 + 7.7) * 0.5 + 0.5) * 0.3;
+  float f = uProgress;
+  float env = sin(f * 3.14159265);
+  float calmK = 1.0 - uCalm;
+  float zoomAmp = mix(1.8, 0.5, uCalm);
 
-  // Distorsión UV previa al corte: "respira" antes de disolver
-  float env = sin(uProgress * 3.14159265);
-  vec2 distortedUv = vUv + (vec2(n - 0.5), vec2(snoise(vUv * 3.0 - uProgress) * 0.5)) * uDissolveAmp * env;
+  vec2 ctr = vec2(0.5);
+  vec2 dir = vUv - ctr;
+  float rlen = max(length(dir), 1e-4);
+  vec2 rdir = dir / rlen;
 
-  vec3 tex1 = texture2D(uTex1, distortedUv).rgb;
-  vec3 tex2 = texture2D(uTex2, distortedUv).rgb;
+  // tex1: la cámara se adentra (muestreo cada vez más central)
+  vec2 uv1 = ctr + dir / (1.0 + f * zoomAmp);
+  // tex2: emerge desde el interior (empieza muy adentro, aterriza en 1.0)
+  vec2 uv2 = ctr + dir / (1.0 + (1.0 - f) * zoomAmp);
 
-  tex1 = applySepia(tex1, uSepia1);
-  tex2 = applySepia(tex2, uSepia2);
+  float radius = (0.003 + env * 0.011) * calmK + 0.001;
+  float aberr = env * 0.014 * calmK;
 
-  // Máscara de disolución con borde luminoso (oculta el corte entre fotos distintas)
-  float edge = uEdgeWidth;
-  float mask = smoothstep(uProgress - edge, uProgress + edge, n);
+  vec3 c1 = applySepia(flightSample(uTex1, uv1, rdir, radius, aberr), uSepia1);
+  vec3 c2 = applySepia(flightSample(uTex2, uv2, rdir, radius, aberr), uSepia2);
 
-  // Borde de "quemado de archivo": línea cálida donde una época devora a la otra
-  float band = smoothstep(uProgress - edge * 2.2, uProgress, n)
-             - smoothstep(uProgress, uProgress + edge * 2.2, n);
-  vec3 burn = vec3(1.0, 0.72, 0.32) * band * 0.85;
+  // El corte ocurre a mitad del vuelo, tapado por blur + flash
+  float cross = smoothstep(0.38, 0.62, f);
+  vec3 col = mix(c1, c2, cross);
 
-  vec3 col = mix(tex1, tex2, mask) + burn;
+  // Flash cálido de "salto temporal"
+  float flash = smoothstep(0.30, 0.50, f) * (1.0 - smoothstep(0.50, 0.70, f));
+  col += vec3(1.0, 0.84, 0.58) * flash * 0.85 * calmK;
 
-  // Viñeta cinematográfica
-  float d = distance(vUv, vec2(0.5));
-  col *= smoothstep(0.95, 0.35, d) * 0.35 + 0.65;
+  // Polvo/estelas en el aire durante el vuelo
+  vec2 grid = floor(vUv * vec2(200.0, 112.0));
+  float h = fract(sin(dot(grid + floor(f * 30.0), vec2(12.9898, 78.233))) * 43758.5453);
+  col += step(0.986, h) * env * 0.45 * calmK;
+
+  // Viñeta cinematográfica reforzada en vuelo
+  float d = distance(vUv, ctr) * (1.0 + env * 0.25);
+  col *= smoothstep(1.0, 0.3, d) * 0.4 + 0.6;
 
   gl_FragColor = vec4(col, 1.0);
 }

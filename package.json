@@ -1,10 +1,10 @@
 {
-  "name": "morph-3d-barrio-abajo",
+  "name": "morph-3d-tunel-barrio-abajo",
   "version": "0.1.0",
   "type": "module",
   "description": "Timeline inmersiva Barrio Abajo (Barranquilla) — scroll vertical, avance horizontal, morphing 3D WebGL entre JPGs de distintas épocas",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5178",
     "build": "vite build",
     "preview": "vite preview"
   },

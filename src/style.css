@@ -26,8 +26,19 @@ body {
   z-index: 0;
 }
 
-#grain {
+/* Viñeta de velocidad: aparece con la velocidad real de scroll */
+#speed {
   position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.55) 78%, rgba(232, 182, 76, 0.12) 100%);
+}
+
+#hud-year.rolling { filter: blur(1.5px); }
+
+#grain {  position: fixed;
   inset: 0;
   z-index: 3;
   pointer-events: none;
