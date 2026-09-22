@@ -2,13 +2,11 @@
   --bg: #0d0d0d;
   --ink: #f5f1e8;
   --accent: #e8b64c;
-  --card: rgba(8, 8, 10, 0.62);
+  --card: rgba(8, 8, 10, 0.68);
   --line: rgba(255, 255, 255, 0.14);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
-html { scroll-behavior: auto; }
 
 body {
   background: var(--bg);
@@ -17,14 +15,67 @@ body {
   overflow-x: hidden;
 }
 
-/* Canvas WebGL fijo a pantalla completa */
-#canvas-container, #canvas-container canvas {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 0;
+/* Escenario fijo: el scroll mueve el divisor, no las fotos */
+#stage { position: fixed; inset: 0; z-index: 0; }
+.layer { position: absolute; inset: 0; }
+.layer img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scale(1.06);
+  will-change: transform;
 }
+.layer-now { will-change: clip-path; }
+
+.sepia-4 { filter: sepia(0.55) contrast(1.08) brightness(0.88); }
+.sepia-3 { filter: sepia(0.42) contrast(1.06) brightness(0.92); }
+.sepia-2 { filter: sepia(0.25) contrast(1.04) brightness(0.96); }
+.sepia-1 { filter: sepia(0.10) contrast(1.02) brightness(0.98); }
+.sepia-0 { filter: none; }
+
+#divider {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--ink);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.8);
+  will-change: left;
+}
+
+#handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--ink);
+  color: #111;
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+}
+#handle .grip { font-weight: 400; opacity: 0.6; font-size: 0.68rem; }
+
+.tag {
+  position: absolute;
+  top: 5.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.tag b { color: var(--accent); }
+#tagPast { left: 1rem; }
+#tagNow { right: 1rem; }
 
 #grain {
   position: fixed;
@@ -44,7 +95,6 @@ body {
   align-items: flex-start;
   padding: 1.1rem 1.4rem;
   pointer-events: none;
-  mix-blend-mode: normal;
 }
 
 .hud-kicker {
@@ -55,13 +105,7 @@ body {
   color: var(--accent);
   margin-bottom: 0.3rem;
 }
-
-#hud h1 {
-  font-size: clamp(1.1rem, 2.4vw, 1.7rem);
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
+#hud h1 { font-size: clamp(1.1rem, 2.4vw, 1.7rem); font-weight: 650; }
 .hud-right { text-align: right; }
 #hud-year {
   display: block;
@@ -70,59 +114,47 @@ body {
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+#hud-year.rolling { filter: blur(1.5px); }
 #hud-era { font-size: 0.8rem; opacity: 0.7; letter-spacing: 0.18em; }
 
-/* Cada época aporta 160vh de scroll vertical */
-#timeline-wrapper { position: relative; z-index: 5; }
-
-.era {
-  min-height: 160vh;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 6vw;
-  pointer-events: none;
-}
-
-/* Alternar lado de la tarjeta para reforzar el movimiento horizontal */
-.era:nth-child(even) { justify-content: flex-end; }
-
 .info-card {
-  pointer-events: auto;
-  max-width: 400px;
-  padding: 1.6rem 1.7rem;
+  position: fixed;
+  bottom: 5.2rem;
+  z-index: 5;
+  max-width: 330px;
+  padding: 1.2rem 1.3rem;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  opacity: 0;
-  transform: translateY(50px);
+  pointer-events: none;
 }
-
+#cardPast { left: 1.2rem; }
+#cardNow { right: 1.2rem; text-align: right; }
 .info-card .year {
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   font-weight: 700;
 }
+.info-card h2 { margin: 0.4rem 0; font-size: 1.25rem; line-height: 1.15; }
+.info-card p { opacity: 0.88; line-height: 1.5; font-size: 0.9rem; }
 
-.info-card h2 { margin: 0.55rem 0 0.5rem; font-size: 1.7rem; line-height: 1.1; }
-.info-card p { opacity: 0.88; line-height: 1.55; font-size: 0.98rem; }
-.info-card .hint { display: inline-block; margin-top: 0.9rem; font-size: 0.8rem; opacity: 0.6; }
+/* Altura de scroll */
+#timeline-wrapper { position: relative; z-index: -1; }
+.era { min-height: 160vh; }
 
-/* Progreso inferior */
 #progress {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 64px;
+  bottom: 1.4rem;
   z-index: 10;
   width: min(520px, 80vw);
 }
-
 #progress-bar {
   height: 2px;
   background: rgba(255, 255, 255, 0.18);
@@ -130,14 +162,12 @@ body {
   overflow: hidden;
 }
 #progress-fill { height: 100%; width: 0%; background: var(--accent); }
-
 #dots {
   display: flex;
   justify-content: space-between;
   margin-top: 0.6rem;
   font-size: 0.72rem;
   letter-spacing: 0.1em;
-  opacity: 0.85;
 }
 #dots button {
   background: none; border: none; color: inherit;
@@ -146,41 +176,8 @@ body {
 }
 #dots button.active { opacity: 1; color: var(--accent); }
 
-/* Tira horizontal inferior: se traslada en X con el scroll */
-#filmstrip {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  height: 44px;
-  z-index: 9;
-  overflow: hidden;
-  border-top: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-}
-#filmstrip-inner {
-  display: flex;
-  gap: 8px;
-  height: 100%;
-  align-items: center;
-  padding: 0 12px;
-  width: max-content;
-  will-change: transform;
-}
-#filmstrip-inner img {
-  height: 30px;
-  width: 48px;
-  object-fit: cover;
-  border-radius: 4px;
-  opacity: 0.75;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-#fallback {
-  position: fixed; inset: auto 1rem 5rem 1rem; z-index: 20;
-  background: #2a1503; padding: 1rem; border-radius: 8px;
-}
-
-@media (max-width: 640px) {
-  .era { padding: 0 1rem; justify-content: center !important; }
-  .info-card { max-width: 92vw; }
+@media (max-width: 760px) {
+  #cardPast, #cardNow { max-width: 44vw; bottom: 6rem; padding: 0.9rem; }
+  #cardPast h2, #cardNow h2 { font-size: 1rem; }
+  #cardPast p, #cardNow p { display: none; }
 }

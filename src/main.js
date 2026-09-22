@@ -1,207 +1,150 @@
-import * as THREE from 'three';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { vertexShader, fragmentShader } from './shaders.js';
 
 gsap.registerPlugin(ScrollTrigger);
 
-// ---------------------------------------------------------------------------
-// Config: reemplaza estos JPG por tus fotos reales de Barrio Abajo.
-// Mantén nombres y aspecto 16/9, `object-fit` lo resuelve el shader (cover).
-// ---------------------------------------------------------------------------
+// Variante DÍPTICO (sin WebGL): pasado y presente coexisten en pantalla
+// dividida. El scroll mueve el divisor de derecha a izquierda revelando la
+// época siguiente; las tarjetas viven una a cada lado. Al avanzar de par,
+// la foto "ahora" pasa a ser el "antes". Reemplaza los JPG en public/img/.
 const ERAS = [
-  { year: '1880', file: '/img/barrio-abajo-1880.jpg', sepia: 0.85, label: '1880' },
-  { year: '1920', file: '/img/barrio-abajo-1920.jpg', sepia: 0.65, label: '1920' },
-  { year: '1960', file: '/img/barrio-abajo-1960.jpg', sepia: 0.35, label: '1960' },
-  { year: '1990', file: '/img/barrio-abajo-1990.jpg', sepia: 0.12, label: '1990' },
-  { year: '2026', file: '/img/barrio-abajo-2026.jpg', sepia: 0.0, label: '2026' },
+  { year: 1880, file: '/img/barrio-abajo-1880.jpg', sepia: 4, tag: '1880 · Fundación', title: 'Orígenes del Barrio Abajo', text: 'Calles de arena, casas de bahareque y palma.' },
+  { year: 1920, file: '/img/barrio-abajo-1920.jpg', sepia: 3, tag: '1920 · Aduana y Tranvía', title: 'Puerto y modernidad', text: 'La Aduana, el tranvía y las casonas republicanas.' },
+  { year: 1960, file: '/img/barrio-abajo-1960.jpg', sepia: 2, tag: '1960 · Industria y Carnaval', title: 'Consolidación popular', text: 'Fábricas junto al río, cumbiambas y danzas.' },
+  { year: 1990, file: '/img/barrio-abajo-1990.jpg', sepia: 1, tag: '1990 · Resistencia', title: 'Memoria que resiste', text: 'Comparsas, cocinas tradicionales y vecindad.' },
+  { year: 2026, file: '/img/barrio-abajo-2026.jpg', sepia: 0, tag: '2026 · Distrito Creativo', title: 'Presente vivo', text: 'Museo del Caribe, Plaza de la Aduana, Cumbiambero.' },
 ];
+const N = ERAS.length;
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const container = document.getElementById('canvas-container');
+const pastImg = document.getElementById('pastImg');
+const nowImg = document.getElementById('nowImg');
+const nowLayer = document.querySelector('.layer-now');
+const divider = document.getElementById('divider');
+const handleYears = document.getElementById('handleYears');
+const tagPastYear = document.getElementById('tagPastYear');
+const tagNowYear = document.getElementById('tagNowYear');
 const hudEra = document.getElementById('hud-era');
 const hudYear = document.getElementById('hud-year');
 const progressFill = document.getElementById('progress-fill');
 const dotsBox = document.getElementById('dots');
-const stripInner = document.getElementById('filmstrip-inner');
+const cardPast = document.getElementById('cardPast');
+const cardNow = document.getElementById('cardNow');
 
-// Dots + filmstrip -----------------------------------------------
+const clamp01 = (v) => Math.min(1, Math.max(0, v));
+const smooth = (t) => t * t * (3 - 2 * t);
+
+function setEraContent(prefix, era) {
+  document.getElementById(`card${prefix}Year`).textContent = era.tag;
+  document.getElementById(`card${prefix}Title`).textContent = era.title;
+  document.getElementById(`card${prefix}Text`).textContent = era.text;
+}
+
+function setImg(img, era) {
+  const url = era.file;
+  if (img.dataset.src !== url) {
+    img.dataset.src = url;
+    img.src = url;
+  }
+  img.className = `sepia-${era.sepia}`;
+}
+
+// Dots: el dot i muestra la época i a pantalla completa (g = i)
+const dotsScroll = { get: () => ({ start: 0, end: 1 }) };
 ERAS.forEach((era, i) => {
   const b = document.createElement('button');
-  b.textContent = era.label;
+  b.textContent = era.year;
   b.addEventListener('click', () => {
-    const y = document.querySelectorAll('.era')[i].offsetTop + window.innerHeight * 0.4;
-    window.scrollTo({ top: y, behavior: 'smooth' });
+    const st = dotsScroll.st;
+    const target = st.start + (st.end - st.start) * (i / (N - 1));
+    window.scrollTo({ top: target, behavior: 'smooth' });
   });
   dotsBox.appendChild(b);
-
-  const img = document.createElement('img');
-  img.src = era.file;
-  img.alt = `Miniatura ${era.year}`;
-  stripInner.appendChild(img);
 });
 const dotBtns = [...dotsBox.querySelectorAll('button')];
 
-// Escena Three.js ------------------------------------------------
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-} catch (e) {
-  document.getElementById('fallback').hidden = false;
-  throw e;
-}
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-container.appendChild(renderer.domElement);
-
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 20);
-camera.position.z = 3.2;
-
-// Plano 16:9 con segmentos para el relieve 3D (vertex warp)
-const geometry = new THREE.PlaneGeometry(7.2, 4.05, 48, 27);
-const loader = new THREE.TextureLoader();
-loader.setCrossOrigin('anonymous');
-
-function loadTex(url) {
-  return new Promise((resolve) => {
-    loader.load(url, (t) => {
-      t.colorSpace = THREE.SRGBColorSpace;
-      // Cover: recorta como object-fit:cover según aspecto de pantalla
-      const screenAsp = window.innerWidth / window.innerHeight;
-      const imgAsp = t.image.width / t.image.height;
-      if (imgAsp > screenAsp) {
-        const w = screenAsp / imgAsp;
-        t.wrapS = THREE.ClampToEdgeWrapping;
-        t.repeat.x = w; t.offset.x = (1 - w) / 2;
-      } else {
-        const h = imgAsp / screenAsp;
-        t.repeat.y = h; t.offset.y = (1 - h) / 2;
-      }
-      resolve(t);
-    }, undefined, () => resolve(null));
-  });
+let shownYear = -1;
+let rollTimer = 0;
+function renderYear(floatYear) {
+  const y = Math.round(floatYear);
+  if (y === shownYear) return;
+  shownYear = y;
+  hudYear.textContent = y;
+  hudYear.classList.add('rolling');
+  clearTimeout(rollTimer);
+  rollTimer = setTimeout(() => hudYear.classList.remove('rolling'), 150);
 }
 
-// Textura 1x1 de fallback (si aún no hay JPGs reales)
-function placeholderTex(hex) {
-  const c = document.createElement('canvas');
-  c.width = 16; c.height = 9;
-  const g = c.getContext('2d');
-  g.fillStyle = hex; g.fillRect(0, 0, 16, 9);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
+let curA = -1;
+function render(g) {
+  const gc = clamp01(g / (N - 1)) * (N - 1);
+  const a = Math.min(Math.floor(gc), N - 2);
+  const lastPair = gc >= N - 1;
+  const ai = lastPair ? N - 2 : a;
+  const f = lastPair ? 1 : gc - Math.floor(gc);
+  const bi = Math.min(ai + 1, N - 1);
+  const A = ERAS[ai], B = ERAS[bi];
 
-const material = new THREE.ShaderMaterial({
-  vertexShader,
-  fragmentShader,
-  uniforms: {
-    uTex1: { value: placeholderTex('#2b2118') },
-    uTex2: { value: placeholderTex('#1a2b33') },
-    uProgress: { value: 0 },
-    uIntensity: { value: 0.35 },
-    uNoiseScale: { value: 4.0 },
-    uEdgeWidth: { value: 0.12 },
-    uSepia1: { value: ERAS[0].sepia },
-    uSepia2: { value: ERAS[1].sepia },
-    uDissolveAmp: { value: 0.035 },
-  },
-});
-scene.add(new THREE.Mesh(geometry, material));
+  if (ai !== curA) {
+    curA = ai;
+    setImg(pastImg, A);
+    setImg(nowImg, B);
+    setEraContent('Past', A);
+    setEraContent('Now', B);
+    tagPastYear.textContent = A.year;
+    tagNowYear.textContent = B.year;
+    handleYears.textContent = `${A.year} → ${B.year}`;
+  }
 
-const textures = new Array(ERAS.length);
-for (let i = 0; i < ERAS.length; i++) textures[i] = placeholderTex(['#3a2c1c', '#33424a', '#4a3330', '#2c3a2e', '#1f2c44'][i % 5]);
-material.uniforms.uTex1.value = textures[0];
-material.uniforms.uTex2.value = textures[1];
-// Carga progresiva: a medida que llega cada JPG real, sustituye el placeholder
-ERAS.forEach((era, i) => {
-  loadTex(era.file).then((t) => {
-    if (!t) return;
-    textures[i] = t;
-    applyState();
-  });
-});
+  // Fase del par: 0–0.2 pasado solo, 0.2–0.8 barrido, 0.8–1 ahora solo.
+  // El barrido ocupa el 60% (asimétrico a propósito: se siente progresivo).
+  const sweep = smooth(clamp01((f - 0.2) / 0.6));
+  const hiddenPct = (1 - sweep) * 100; // inset-left de la capa "ahora"
+  nowLayer.style.clipPath = `inset(0 0 0 ${hiddenPct.toFixed(2)}%)`;
+  divider.style.left = `${(100 - hiddenPct).toFixed(2)}%`;
 
-// Estado global de scroll ----------------------------------------
-const state = { global: 0, pairIndex: 0, pairFract: 0 };
-const N = ERAS.length;
+  // Parallax leve: cada foto cede ante el divisor
+  if (!reduceMotion) {
+    pastImg.style.transform = `scale(1.06) translateX(${(-(1 - sweep) * 24).toFixed(1)}px)`;
+    nowImg.style.transform = `scale(1.06) translateX(${((sweep) * 0 - (1 - sweep) * -24).toFixed(1)}px)`;
+  }
 
-function applyState() {
-  const g = THREE.MathUtils.clamp(state.global, 0, N - 1);
-  const idx = Math.min(Math.floor(g), N - 2);
-  const fract = g - Math.floor(g);
-  // Última era: fract llega a 1 dentro del último par
-  const lastPair = g >= N - 1;
-  state.pairIndex = lastPair ? N - 2 : idx;
-  state.pairFract = lastPair ? 1 : (idx === Math.floor(g) ? fract : fract);
+  // Tarjetas: la del pasado se apaga al cruzar la mitad, la del ahora enciende
+  cardPast.style.opacity = (1 - smooth(clamp01((f - 0.35) / 0.2))).toFixed(2);
+  cardPast.style.transform = `translateY(${(-smooth(clamp01((f - 0.35) / 0.2)) * 24).toFixed(1)}px)`;
+  cardNow.style.opacity = smooth(clamp01((f - 0.45) / 0.2)).toFixed(2);
+  cardNow.style.transform = `translateY(${((1 - smooth(clamp01((f - 0.45) / 0.2))) * 24).toFixed(1)}px)`;
 
-  const a = state.pairIndex;
-  const b = Math.min(a + 1, N - 1);
-  if (material.uniforms.uTex1.value !== textures[a]) material.uniforms.uTex1.value = textures[a];
-  if (material.uniforms.uTex2.value !== textures[b]) material.uniforms.uTex2.value = textures[b];
-  material.uniforms.uProgress.value = state.pairFract;
-  material.uniforms.uSepia1.value = ERAS[a].sepia;
-  material.uniforms.uSepia2.value = ERAS[b].sepia;
-
-  // HUD: año interpolado + era activa
-  const activeFloat = g;
-  const active = Math.round(activeFloat);
+  renderYear(A.year + (B.year - A.year) * f);
+  const active = Math.round(gc);
   hudEra.textContent = `${String(active + 1).padStart(2, '0')} / ${String(N).padStart(2, '0')}`;
-  hudYear.textContent = ERAS[active].year;
-  progressFill.style.width = `${(g / (N - 1)) * 100}%`;
+  progressFill.style.width = `${(gc / (N - 1)) * 100}%`;
   dotBtns.forEach((d, i) => d.classList.toggle('active', i === active));
-
-  // Movimiento horizontal fantasma: la tira inferior se desplaza en X
-  const maxShift = Math.max(0, stripInner.scrollWidth - window.innerWidth);
-  stripInner.style.transform = `translateX(${-maxShift * (g / (N - 1))}px)`;
-
-  // Leve deriva lateral de cámara = sensación de travelling horizontal
-  camera.position.x = THREE.MathUtils.lerp(-0.25, 0.25, g / (N - 1));
-  camera.lookAt(0, 0, 0);
 }
 
-// Scroll vertical -> progreso global (scrub suavizado) -----------
-const sections = gsap.utils.toArray('.era');
-sections.forEach((sec) => {
-  const card = sec.querySelector('.info-card');
-  gsap.fromTo(card, { y: 50, opacity: 0 }, {
-    y: 0, opacity: 1, ease: 'none',
-    scrollTrigger: { trigger: sec, start: 'top 75%', end: 'center center', scrub: true },
-  });
-  gsap.to(card, {
-    y: -60, opacity: 0, ease: 'none',
-    scrollTrigger: { trigger: sec, start: 'center center', end: 'bottom 30%', scrub: true },
-  });
+// Mango arrastrable: arrastrar horizontalmente hace scrub del tiempo
+const handle = document.getElementById('handle');
+let dragging = false;
+let lastX = 0;
+handle.addEventListener('pointerdown', (e) => {
+  dragging = true;
+  lastX = e.clientX;
+  handle.setPointerCapture(e.pointerId);
 });
+handle.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  lastX = e.clientX;
+  window.scrollBy({ top: -dx * 6 }); // arrastrar a la derecha = ir al pasado
+});
+handle.addEventListener('pointerup', () => { dragging = false; });
 
-ScrollTrigger.create({
+const st = ScrollTrigger.create({
   trigger: '#timeline-wrapper',
   start: 'top top',
   end: 'bottom bottom',
   scrub: 1,
-  onUpdate: (self) => {
-    state.global = self.progress * (N - 1);
-    applyState();
-  },
+  onUpdate: (self) => render(self.progress * (N - 1)),
 });
-applyState();
-
-// Loop + resize ---------------------------------------------------
-function tick() {
-  requestAnimationFrame(tick);
-  renderer.render(scene, camera);
-}
-tick();
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// Reduce motion: congela el relieve 3D pero mantiene el fundido
-if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  material.uniforms.uIntensity.value = 0.0;
-  material.uniforms.uDissolveAmp.value = 0.0;
-}
+dotsScroll.st = st;
+render(0);
