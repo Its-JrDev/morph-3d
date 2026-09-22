@@ -3,20 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Barrio Abajo — Línea de Tiempo Morph 3D</title>
-  <meta name="description" content="Scroll vertical que avanza horizontalmente en el tiempo. Morphing 3D WebGL entre fotos JPG de distintas épocas de Barrio Abajo, Barranquilla." />
+  <title>Barrio Abajo — Línea de Tiempo Clip-Path (DOM)</title>
+  <meta name="description" content="Approach DOM liviano: scroll vertical que desplaza la línea horizontalmente, revelado por clip-path circular + zoom-through. Sin WebGL." />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
-  <!-- Lienzo WebGL fijo: aquí ocurre el morphing 3D -->
-  <div id="canvas-container" aria-hidden="true"></div>
-  <div id="grain" aria-hidden="true"></div>
-
   <!-- HUD superior -->
   <header id="hud">
     <div class="hud-left">
-      <span class="hud-kicker">Barranquilla · Barrio Abajo</span>
-      <h1>Línea de tiempo inmersiva</h1>
+      <span class="hud-kicker">Barranquilla · Barrio Abajo · approach DOM</span>
+      <h1>Línea de tiempo — clip-path + zoom</h1>
     </div>
     <div class="hud-right">
       <span id="hud-era">01 / 05</span>
@@ -24,67 +20,75 @@
     </div>
   </header>
 
-  <!-- Contenedor con altura de scroll: el scroll vertical genera el avance -->
-  <main id="timeline-wrapper">
-    <!-- Track horizontal fantasma: se desplaza en X para dar la sensación lateral -->
-    <div id="ghost-track" aria-hidden="true"></div>
+  <!-- Contenedor pineado: el scroll vertical desplaza el track en X -->
+  <main class="timeline-wrapper">
+    <div class="timeline-track">
 
-    <!-- Secciones por época: cada una ocupa 150vh de scroll -->
-    <section class="era" data-index="0" data-year="1880">
-      <div class="info-card">
-        <span class="year">1880 · Fundación</span>
-        <h2>Orígenes del Barrio Abajo</h2>
-        <p>Calles de arena, casas de bahareque y palma. Pescadores, artesanos y el primer latido festivo junto al caño.</p>
-        <span class="hint">Sigue bajando ↓</span>
-      </div>
-    </section>
+      <article class="timeline-item" data-year="1880">
+        <div class="img-container">
+          <img src="/img/barrio-abajo-1880.jpg" alt="Barrio Abajo en 1880" class="timeline-img sepia-4" />
+        </div>
+        <div class="info-card">
+          <span class="year">1880 · Fundación</span>
+          <h2>Orígenes del Barrio Abajo</h2>
+          <p>Calles de arena, casas de bahareque y palma. Pescadores, artesanos y el primer latido festivo junto al caño.</p>
+          <span class="hint">Sigue bajando ↓</span>
+        </div>
+      </article>
 
-    <section class="era" data-index="1" data-year="1920">
-      <div class="info-card">
-        <span class="year">1920 · Aduana y Tranvía</span>
-        <h2>Puerto y modernidad</h2>
-        <p>La Aduana, el tranvía y las casonas republicanas. El barrio se vuelve puerta comercial del Caribe.</p>
-      </div>
-    </section>
+      <article class="timeline-item" data-year="1920">
+        <div class="img-container clip-mask">
+          <img src="/img/barrio-abajo-1920.jpg" alt="Barrio Abajo en 1920" class="timeline-img sepia-3" />
+        </div>
+        <div class="info-card">
+          <span class="year">1920 · Aduana y Tranvía</span>
+          <h2>Puerto y modernidad</h2>
+          <p>La Aduana, el tranvía y las casonas republicanas. El barrio se vuelve puerta comercial del Caribe.</p>
+        </div>
+      </article>
 
-    <section class="era" data-index="2" data-year="1960">
-      <div class="info-card">
-        <span class="year">1960 · Industria y Carnaval</span>
-        <h2>Consolidación popular</h2>
-        <p>Fábricas junto al río, cumbiambas y danzas. El Carnaval encuentra aquí su casa.</p>
-      </div>
-    </section>
+      <article class="timeline-item" data-year="1960">
+        <div class="img-container clip-mask">
+          <img src="/img/barrio-abajo-1960.jpg" alt="Barrio Abajo en 1960" class="timeline-img sepia-2" />
+        </div>
+        <div class="info-card">
+          <span class="year">1960 · Industria y Carnaval</span>
+          <h2>Consolidación popular</h2>
+          <p>Fábricas junto al río, cumbiambas y danzas. El Carnaval encuentra aquí su casa.</p>
+        </div>
+      </article>
 
-    <section class="era" data-index="3" data-year="1990">
-      <div class="info-card">
-        <span class="year">1990 · Resistencia</span>
-        <h2>Memoria que resiste</h2>
-        <p>Deterioro urbano pero resistencia cultural: comparsas, cocinas tradicionales y vecindad.</p>
-      </div>
-    </section>
+      <article class="timeline-item" data-year="1990">
+        <div class="img-container clip-mask">
+          <img src="/img/barrio-abajo-1990.jpg" alt="Barrio Abajo en 1990" class="timeline-img sepia-1" />
+        </div>
+        <div class="info-card">
+          <span class="year">1990 · Resistencia</span>
+          <h2>Memoria que resiste</h2>
+          <p>Deterioro urbano pero resistencia cultural: comparsas, cocinas tradicionales y vecindad.</p>
+        </div>
+      </article>
 
-    <section class="era" data-index="4" data-year="2026">
-      <div class="info-card">
-        <span class="year">2026 · Distrito Creativo</span>
-        <h2>Presente vivo</h2>
-        <p>Museo del Caribe, Plaza de la Aduana, Rincón del Cumbiambero. El barrio renace sin perder su alma.</p>
-        <span class="hint">↑ Sube para viajar al pasado</span>
-      </div>
-    </section>
+      <article class="timeline-item" data-year="2026">
+        <div class="img-container clip-mask">
+          <img src="/img/barrio-abajo-2026.jpg" alt="Barrio Abajo en la actualidad" class="timeline-img sepia-0" />
+        </div>
+        <div class="info-card">
+          <span class="year">2026 · Distrito Creativo</span>
+          <h2>Presente vivo</h2>
+          <p>Museo del Caribe, Plaza de la Aduana, Rincón del Cumbiambero. El barrio renace sin perder su alma.</p>
+          <span class="hint">↑ Sube para viajar al pasado</span>
+        </div>
+      </article>
+
+    </div>
   </main>
 
-  <!-- Barra de progreso + dots por época -->
+  <!-- Progreso + dots por época -->
   <nav id="progress">
     <div id="progress-bar"><div id="progress-fill"></div></div>
     <div id="dots"></div>
   </nav>
-
-  <!-- Tira horizontal inferior: refuerzo visual del avance lateral -->
-  <div id="filmstrip" aria-hidden="true"><div id="filmstrip-inner"></div></div>
-
-  <div id="fallback" hidden>
-    <p>Tu navegador no soporta WebGL. Muestra las imágenes con fundido simple.</p>
-  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

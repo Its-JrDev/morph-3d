@@ -2,37 +2,17 @@
   --bg: #0d0d0d;
   --ink: #f5f1e8;
   --accent: #e8b64c;
-  --card: rgba(8, 8, 10, 0.62);
+  --card: rgba(8, 8, 10, 0.65);
   --line: rgba(255, 255, 255, 0.14);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
-html { scroll-behavior: auto; }
 
 body {
   background: var(--bg);
   color: var(--ink);
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   overflow-x: hidden;
-}
-
-/* Canvas WebGL fijo a pantalla completa */
-#canvas-container, #canvas-container canvas {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 0;
-}
-
-#grain {
-  position: fixed;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  opacity: 0.09;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
 }
 
 #hud {
@@ -44,7 +24,6 @@ body {
   align-items: flex-start;
   padding: 1.1rem 1.4rem;
   pointer-events: none;
-  mix-blend-mode: normal;
 }
 
 .hud-kicker {
@@ -56,11 +35,7 @@ body {
   margin-bottom: 0.3rem;
 }
 
-#hud h1 {
-  font-size: clamp(1.1rem, 2.4vw, 1.7rem);
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
+#hud h1 { font-size: clamp(1.1rem, 2.4vw, 1.7rem); font-weight: 650; }
 
 .hud-right { text-align: right; }
 #hud-year {
@@ -72,24 +47,64 @@ body {
 }
 #hud-era { font-size: 0.8rem; opacity: 0.7; letter-spacing: 0.18em; }
 
-/* Cada época aporta 160vh de scroll vertical */
-#timeline-wrapper { position: relative; z-index: 5; }
-
-.era {
-  min-height: 160vh;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0 6vw;
-  pointer-events: none;
+/* Track horizontal: 5 items x 100vw */
+.timeline-wrapper {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
 }
 
-/* Alternar lado de la tarjeta para reforzar el movimiento horizontal */
-.era:nth-child(even) { justify-content: flex-end; }
+.timeline-track {
+  display: flex;
+  width: 500vw;
+  height: 100%;
+  will-change: transform;
+}
+
+.timeline-item {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.timeline-item:nth-child(even) .info-card { margin-left: auto; }
+.timeline-item:nth-child(odd) .info-card { margin-right: auto; }
+
+.img-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  will-change: clip-path, transform;
+}
+
+.timeline-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  will-change: transform, opacity, filter;
+}
+
+/* La foto entrante nace oculta tras un punto diminuto al centro */
+.clip-mask { clip-path: circle(0% at 50% 50%); }
+
+/* Filtros de época: del archivo sepia al color actual */
+.sepia-4 { filter: sepia(0.55) contrast(1.08) brightness(0.88); }
+.sepia-3 { filter: sepia(0.42) contrast(1.06) brightness(0.92); }
+.sepia-2 { filter: sepia(0.25) contrast(1.04) brightness(0.96); }
+.sepia-1 { filter: sepia(0.1) contrast(1.02) brightness(0.98); }
+.sepia-0 { filter: none; }
 
 .info-card {
-  pointer-events: auto;
+  position: relative;
+  z-index: 2;
   max-width: 400px;
+  margin: 0 6vw;
   padding: 1.6rem 1.7rem;
   background: var(--card);
   border: 1px solid var(--line);
@@ -98,7 +113,6 @@ body {
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
   opacity: 0;
-  transform: translateY(50px);
 }
 
 .info-card .year {
@@ -113,12 +127,11 @@ body {
 .info-card p { opacity: 0.88; line-height: 1.55; font-size: 0.98rem; }
 .info-card .hint { display: inline-block; margin-top: 0.9rem; font-size: 0.8rem; opacity: 0.6; }
 
-/* Progreso inferior */
 #progress {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 64px;
+  bottom: 1.4rem;
   z-index: 10;
   width: min(520px, 80vw);
 }
@@ -137,7 +150,6 @@ body {
   margin-top: 0.6rem;
   font-size: 0.72rem;
   letter-spacing: 0.1em;
-  opacity: 0.85;
 }
 #dots button {
   background: none; border: none; color: inherit;
@@ -146,41 +158,6 @@ body {
 }
 #dots button.active { opacity: 1; color: var(--accent); }
 
-/* Tira horizontal inferior: se traslada en X con el scroll */
-#filmstrip {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  height: 44px;
-  z-index: 9;
-  overflow: hidden;
-  border-top: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-}
-#filmstrip-inner {
-  display: flex;
-  gap: 8px;
-  height: 100%;
-  align-items: center;
-  padding: 0 12px;
-  width: max-content;
-  will-change: transform;
-}
-#filmstrip-inner img {
-  height: 30px;
-  width: 48px;
-  object-fit: cover;
-  border-radius: 4px;
-  opacity: 0.75;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-#fallback {
-  position: fixed; inset: auto 1rem 5rem 1rem; z-index: 20;
-  background: #2a1503; padding: 1rem; border-radius: 8px;
-}
-
 @media (max-width: 640px) {
-  .era { padding: 0 1rem; justify-content: center !important; }
-  .info-card { max-width: 92vw; }
+  .info-card { max-width: 92vw; margin: 0 1rem !important; }
 }
